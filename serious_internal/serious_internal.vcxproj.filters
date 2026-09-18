@@ -1,39 +1,114 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Source Files">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    <Filter Include="deps">
+      <UniqueIdentifier>{223b6a60-9567-4e96-b82f-ee7898f10a58}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Header Files">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    <Filter Include="deps\imgui">
+      <UniqueIdentifier>{c951e648-879b-47ee-869f-2c90c3adb82d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    <Filter Include="deps\imgui\backends">
+      <UniqueIdentifier>{a6cc2271-78c6-4ccc-bafe-2d97181422e6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="deps\minhook">
+      <UniqueIdentifier>{36ca99a8-bdfd-483c-8bf1-47f98074d5df}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="deps\minhook\include">
+      <UniqueIdentifier>{9d5a8a1b-edd5-4721-baa9-6652fdd71fbf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="deps\minhook\src">
+      <UniqueIdentifier>{2b401e29-9caf-40d4-bcad-51d97888715e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="deps\minhook\src\hde">
+      <UniqueIdentifier>{cc4dcfc3-3941-41d7-bfdb-713c283a3034}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="framework.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="pch.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="hack.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
+    <ClCompile Include="..\deps\imgui\backends\imgui_impl_dx11.cpp">
+      <Filter>deps\imgui\backends</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\imgui\backends\imgui_impl_win32.cpp">
+      <Filter>deps\imgui\backends</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\imgui\imgui.cpp">
+      <Filter>deps\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\imgui\imgui_demo.cpp">
+      <Filter>deps\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\imgui\imgui_draw.cpp">
+      <Filter>deps\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\imgui\imgui_tables.cpp">
+      <Filter>deps\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\imgui\imgui_widgets.cpp">
+      <Filter>deps\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\minhook\src\hde\hde32.c">
+      <Filter>deps\minhook\src\hde</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\minhook\src\hde\hde64.c">
+      <Filter>deps\minhook\src\hde</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\minhook\src\buffer.c">
+      <Filter>deps\minhook\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\minhook\src\hook.c">
+      <Filter>deps\minhook\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\minhook\src\trampoline.c">
+      <Filter>deps\minhook\src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="dllmain.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="pch.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="hack.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
+    <ClInclude Include="..\deps\imgui\backends\imgui_impl_dx11.h">
+      <Filter>deps\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\imgui\backends\imgui_impl_win32.h">
+      <Filter>deps\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\imgui\imconfig.h">
+      <Filter>deps\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\imgui\imgui.h">
+      <Filter>deps\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\imgui\imgui_internal.h">
+      <Filter>deps\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\imgui\imstb_rectpack.h">
+      <Filter>deps\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\imgui\imstb_textedit.h">
+      <Filter>deps\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\imgui\imstb_truetype.h">
+      <Filter>deps\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\minhook\include\MinHook.h">
+      <Filter>deps\minhook\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\minhook\src\hde\hde32.h">
+      <Filter>deps\minhook\src\hde</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\minhook\src\hde\hde64.h">
+      <Filter>deps\minhook\src\hde</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\minhook\src\hde\pstdint.h">
+      <Filter>deps\minhook\src\hde</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\minhook\src\hde\table32.h">
+      <Filter>deps\minhook\src\hde</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\minhook\src\hde\table64.h">
+      <Filter>deps\minhook\src\hde</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\minhook\src\buffer.h">
+      <Filter>deps\minhook\src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\minhook\src\trampoline.h">
+      <Filter>deps\minhook\src</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

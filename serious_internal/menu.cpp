@@ -1,4 +1,3 @@
-#include "pch.h"
 #include "menu.h"
 #include "hack.h"
 #include "esp.h"
@@ -20,7 +19,7 @@ namespace menu {
     static constexpr int kMenuW = 470;
     static constexpr int kMenuH = 680;
 
-    static bool   g_show = false;   
+    static bool   g_show = false;
     static bool   g_unload = false;
     static bool   g_running = false;
     static HANDLE g_thread = nullptr;
@@ -33,9 +32,6 @@ namespace menu {
     static ID3D11DeviceContext*    g_ctx = nullptr;
     static IDXGISwapChain*         g_swap = nullptr;
     static ID3D11RenderTargetView* g_rtv = nullptr;
-
-
-
 
     struct FindCtx { DWORD pid; HWND hwnd; int area; };
     static BOOL CALLBACK EnumCb(HWND hwnd, LPARAM lp)
@@ -53,6 +49,7 @@ namespace menu {
         if (area > ctx->area) { ctx->area = area; ctx->hwnd = hwnd; }
         return TRUE;
     }
+
     static HWND FindGameWindow()
     {
         FindCtx ctx{ GetCurrentProcessId(), nullptr, 0 };

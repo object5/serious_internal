@@ -1,4 +1,5 @@
 #pragma once
+
 #include <cstdint>
 
 namespace hack {
@@ -14,7 +15,6 @@ namespace hack {
     void      SetGodMode(bool on);
     bool      IsGodMode();
 
-
 #ifdef _WIN64
     static const uintptr_t kWorldOffset = 0xA8;  // en_pwoWorld 
     static const uintptr_t kIdOffset = 0x20;     // en_ulID 
@@ -25,10 +25,10 @@ namespace hack {
 
     uintptr_t GetWorld();                        // [player + kWorldOffset]
     uintptr_t FindEntityContainer();             // CDynamicContainer
-    int       GetEntityCount();                  // used 
+    int       GetEntityCount();                  // used
     uintptr_t GetEntity(int index);              // CEntity*
     int       GetEntityId(uintptr_t entity);     // en_ulID
-    float     GetEntityHp(uintptr_t entity);   // [entity+0x110]
+    float     GetEntityHp(uintptr_t entity);     // [entity+0x110]
     bool      SetEntityHp(uintptr_t entity, float hp);
 
     uintptr_t GetEnemyTarget(uintptr_t entity);
