@@ -1,0 +1,42 @@
+#pragma once
+#include <cstdint>
+
+namespace hack {
+ 
+    static const uintptr_t kPlayerPtrOffset = 0x001CA570;
+    static const uintptr_t kHpOffset = 0x110; // [player + 0x110] float
+
+    uintptr_t GetLocalPlayer();
+    bool      IsPlayerValid();
+    float     GetHealth();
+    bool      SetHealth(float hp);
+
+    void      SetGodMode(bool on);
+    bool      IsGodMode();
+
+
+#ifdef _WIN64
+    static const uintptr_t kWorldOffset = 0xA8;  // en_pwoWorld 
+    static const uintptr_t kIdOffset = 0x20;     // en_ulID 
+#else
+    static const uintptr_t kWorldOffset = 0x8C;  // en_pwoWorld 
+    static const uintptr_t kIdOffset = 0x1C;     // en_ulID 
+#endif
+
+    uintptr_t GetWorld();                        // [player + kWorldOffset]
+    uintptr_t FindEntityContainer();             // CDynamicContainer
+    int       GetEntityCount();                  // used 
+    uintptr_t GetEntity(int index);              // CEntity*
+    int       GetEntityId(uintptr_t entity);     // en_ulID
+    float     GetEntityHp(uintptr_t entity);   // [entity+0x110]
+    bool      SetEntityHp(uintptr_t entity, float hp);
+
+    uintptr_t GetEnemyTarget(uintptr_t entity);
+    int       DumpEntityPtrProps(uintptr_t entity, char names[][72], uintptr_t vals[], int max);
+    unsigned  GetEntityFlags(uintptr_t entity);  // en_ulFlags 
+    int       GetEntityRenderType(uintptr_t entity); // en_RenderType
+    bool      GetEntityClassName(uintptr_t entity, char* out, int outLen);
+    bool      IsEnemy(uintptr_t entity);
+    int       GetClassChain(uintptr_t entity, char out[][72], int maxDepth);
+    bool      GetEntityPos(uintptr_t entity, float out[3]); // en_plPlacement
+}
