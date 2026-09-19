@@ -842,4 +842,55 @@ namespace hack {
 		}
 		topUpAmmo(weapons);
 	}
+
+#ifdef _WIN64
+	static const uintptr_t kBodyOff = 0x30, kRelOff = 0x3CC, kPitchOff = 0x3D0;
+#else
+	static const uintptr_t kBodyOff = 0x2C, kRelOff = 0x35C, kPitchOff = 0x360;
+#endif
+
+	bool GetViewAngles(float& yaw, float& pitch)
+	{
+		uintptr_t player = GetLocalPlayer();
+		if (!player) return false;
+		float body = 0, rel = 0, p = 0;
+		if (!readMem(player + kBodyOff, body)) return false;
+		if (!readMem(player + kRelOff, rel)) return false;
+		if (!readMem(player + kPitchOff, p)) return false;
+		yaw = body + rel;
+		pitch = p;
+		return true;
+	}
+
+	bool SetViewAngles(float yaw, float pitch)
+	{
+		uintptr_t player = GetLocalPlayer();
+		if (!player) return false;
+		float body = 0;
+		if (!readMem(player + kBodyOff, body)) return false;
+		float rel = yaw - body;
+		if (!writeMem(player + kRelOff, &rel, sizeof rel)) return false;
+		if (!writeMem(player + kPitchOff, &pitch, sizeof pitch)) return false;
+		return true;
+	}
+
+	bool SetViewAnglesBody(float yaw, float pitch)
+	{
+		uintptr_t player = GetLocalPlayer();
+		if (!player) return false;
+		float zero = 0.0f;
+		if (!writeMem(player + kBodyOff, &yaw, sizeof yaw)) return false;
+		if (!writeMem(player + kRelOff, &zero, sizeof zero)) return false;
+		if (!writeMem(player + kPitchOff, &pitch, sizeof pitch)) return false;
+		return true;
+	}
+
+	bool GetEyePos(float out[3])
+	{
+		uintptr_t player = GetLocalPlayer();
+		if (!player || !out) return false;
+		if (!GetEntityPos(player, out)) return false;
+		out[1] += 1.6f; // как esp::g_eyeH по умолчанию
+		return true;
+	}
 }

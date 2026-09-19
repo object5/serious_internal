@@ -1,6 +1,7 @@
 #include "hack.h"
 #include "menu.h"
 #include "esp.h"
+#include "aim.h"
 
 static HMODULE g_hMod = nullptr;
 
@@ -27,6 +28,7 @@ static DWORD WINAPI MainThread(LPVOID)
             hack::SetRapidFire(!hack::IsRapidFire());
 
         hack::RapidFireTick();
+        aim::Tick();
 
         if (hack::IsGodMode()) {
             float hp = hack::GetHealth();

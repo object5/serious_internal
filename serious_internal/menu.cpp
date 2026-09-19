@@ -1,6 +1,7 @@
 #include "menu.h"
 #include "hack.h"
 #include "esp.h"
+#include "aim.h"
 
 #include <d3d11.h>
 
@@ -138,6 +139,31 @@ namespace menu {
             ImGui::RadioButton("gdi", &esp::g_hookMode, 2);
             if (ImGui::Button("UNLOAD", ImVec2(-1, 0)))
                 g_unload = true;
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Aim")) {
+            ImGui::Checkbox("aimbot enabled", &aim::g_enabled);
+            {
+                static int keyIdx = 0;
+                const char* keys[] = { "RMB", "LMB", "SHIFT", "X1", "Always" };
+                if (ImGui::Combo("aim key", &keyIdx, keys, 5)) {
+                    static const int vk[] = { VK_RBUTTON, VK_LBUTTON, VK_SHIFT, VK_XBUTTON1, 0 };
+                    aim::g_key = vk[keyIdx];
+                }
+            }
+            ImGui::SliderFloat("aim FOV", &aim::g_fov, 5.0f, 90.0f, "%.0f");
+            ImGui::SliderFloat("smooth", &aim::g_smooth, 1.0f, 20.0f, "%.1f");
+            ImGui::SliderFloat("max dist", &aim::g_maxDist, 0.0f, 500.0f, "%.0f");
+            ImGui::SliderFloat("aim height +", &aim::g_aimHeight, -2.0f, 3.0f, "%.2f");
+            ImGui::SliderFloat("eye height", &aim::g_eyeH, 0.5f, 3.0f, "%.2f");
+            ImGui::Checkbox("hide staging (no target)", &aim::g_hideStaged);
+            ImGui::Checkbox("turn body (not only head)", &aim::g_turnBody);
+            float yaw = 0, pitch = 0;
+            if (hack::GetViewAngles(yaw, pitch))
+                ImGui::Text("yaw: %.1f pitch: %.1f tgt: 0x%p", yaw, pitch, (void*)aim::g_target);
+            else
+                ImGui::TextDisabled("no player");
             ImGui::EndTabItem();
         }
 

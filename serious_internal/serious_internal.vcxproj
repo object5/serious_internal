@@ -32,6 +32,7 @@
     <ClCompile Include="..\deps\minhook\src\hook.c" />
     <ClCompile Include="..\deps\minhook\src\trampoline.c" />
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="aim.cpp" />
     <ClCompile Include="esp.cpp" />
     <ClCompile Include="hack.cpp" />
     <ClCompile Include="menu.cpp" />
@@ -54,6 +55,7 @@
     <ClInclude Include="..\deps\minhook\src\hde\table64.h" />
     <ClInclude Include="..\deps\minhook\src\trampoline.h" />
     <ClInclude Include="esp.h" />
+    <ClInclude Include="aim.h" />
     <ClInclude Include="hack.h" />
     <ClInclude Include="menu.h" />
   </ItemGroup>

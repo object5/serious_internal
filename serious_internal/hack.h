@@ -49,4 +49,9 @@ namespace hack {
     bool      GetEntityPos(uintptr_t entity, float out[3]); // en_plPlacement
     bool      GetEntityBox(uintptr_t entity, float mins[3], float maxs[3]); // en_boxSpatialClassification (object space)
     bool      GetEntityMatrix(uintptr_t entity, float m[9]); // en_mRotation
+
+    bool      GetViewAngles(float& yaw, float& pitch); 
+    bool      SetViewAngles(float yaw, float pitch);   
+    bool      SetViewAnglesBody(float yaw, float pitch); 
+    bool      GetEyePos(float out[3]);                 
 }
