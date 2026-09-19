@@ -125,13 +125,13 @@ namespace menu {
 
             bool esp = esp::g_enabled;
             if (ImGui::Checkbox("esp box", &esp)) esp::g_enabled = esp;
-            ImGui::SliderFloat("ESP FOV", &esp::g_fov, 60.0f, 120.0f, "%.0f");
-            ImGui::SliderFloat("ESP max dist", &esp::g_maxDist, 0.0f, 500.0f, "%.0f (0=inf)");
+            ImGui::SliderFloat("ESP FOV (as in game)", &esp::g_fov, 60.0f, 120.0f, "%.0f");
             ImGui::Checkbox("hide staging (no target)", &esp::g_hideStaged);
-            ImGui::SliderFloat("eye height", &esp::g_eyeH, 0.0f, 3.0f, "%.2f");
-            ImGui::Text("drawn: %d cached: %d  vp: %dx%d", esp::g_drawn, esp::g_cached, esp::g_vpW, esp::g_vpH);
-            ImGui::Text("hooks wgl/gdi: %d / %d", esp::g_wglCalls, esp::g_gdiCalls);
-
+            ImGui::Text("drawn: %d cached: %d tgt: %d/%d",
+                esp::g_drawn, esp::g_cached, esp::g_tgtOk, esp::g_tgtAll);
+            ImGui::RadioButton("hook both", &esp::g_hookMode, 0); ImGui::SameLine();
+            ImGui::RadioButton("wgl", &esp::g_hookMode, 1); ImGui::SameLine();
+            ImGui::RadioButton("gdi", &esp::g_hookMode, 2);
             if (ImGui::Button("UNLOAD", ImVec2(-1, 0)))
                 g_unload = true;
             ImGui::EndTabItem();
@@ -150,34 +150,40 @@ namespace menu {
             } else if (ImGui::BeginChild("ents", ImVec2(0, 200), true)) {
                 struct Row { uintptr_t e; int id; float d; float hp; bool tgt; char cls[72]; };
                 static Row rows[2048];
-                int total = 0;
-                float pp[3] = { 0, 0, 0 };
-                uintptr_t playerEnt = hack::GetLocalPlayer();
-                bool hasP = playerEnt && hack::GetEntityPos(playerEnt, pp);
-                for (int i = 0; i < n && total < 2048; ++i) {
-                    uintptr_t e = hack::GetEntity(i);
-                    if (!e) continue;
-                    if (aliveOnly && !(hack::GetEntityFlags(e) & 8)) continue; // ENF_ALIVE
-                    if (enemiesOnly && !hack::IsEnemy(e)) continue;
-                    Row& r = rows[total++];
-                    r.e = e;
-                    r.id = hack::GetEntityId(e);
-                    r.hp = hack::GetEntityHp(e);
-                    r.tgt = hack::GetEnemyTarget(e) != 0;
-                    r.d = -1.f;
-                    float ep[3];
-                    if (hasP && hack::GetEntityPos(e, ep)) {
-                        float dx = ep[0] - pp[0], dy = ep[1] - pp[1], dz = ep[2] - pp[2];
-                        r.d = sqrtf(dx * dx + dy * dy + dz * dz);
+                static int total = 0;
+                static unsigned long long rowTick = 0;
+                unsigned long long now = GetTickCount64();
+                if (now - rowTick > 500 || total == 0) {
+                    rowTick = now;
+                    total = 0;
+                    float pp[3] = { 0, 0, 0 };
+                    uintptr_t playerEnt = hack::GetLocalPlayer();
+                    bool hasP = playerEnt && hack::GetEntityPos(playerEnt, pp);
+                    for (int i = 0; i < n && total < 2048; ++i) {
+                        uintptr_t e = hack::GetEntity(i);
+                        if (!e) continue;
+                        if (aliveOnly && !(hack::GetEntityFlags(e) & 8)) continue; // ENF_ALIVE
+                        if (enemiesOnly && !hack::IsEnemy(e)) continue;
+                        Row& r = rows[total++];
+                        r.e = e;
+                        r.id = hack::GetEntityId(e);
+                        r.hp = hack::GetEntityHp(e);
+                        r.tgt = hack::GetEnemyTarget(e) != 0;
+                        r.d = -1.f;
+                        float ep[3];
+                        if (hasP && hack::GetEntityPos(e, ep)) {
+                            float dx = ep[0] - pp[0], dy = ep[1] - pp[1], dz = ep[2] - pp[2];
+                            r.d = sqrtf(dx * dx + dy * dy + dz * dz);
+                        }
+                        if (!hack::GetEntityClassName(e, r.cls, sizeof(r.cls)))
+                            memcpy(r.cls, "?", 2);
                     }
-                    if (!hack::GetEntityClassName(e, r.cls, sizeof(r.cls)))
-                        memcpy(r.cls, "?", 2);
-                }
-                for (int i = 1; i < total; ++i) {
-                    Row tmp = rows[i];
-                    int j = i - 1;
-                    while (j >= 0 && rows[j].d > tmp.d) { rows[j + 1] = rows[j]; --j; }
-                    rows[j + 1] = tmp;
+                    for (int i = 1; i < total; ++i) {
+                        Row tmp = rows[i];
+                        int j = i - 1;
+                        while (j >= 0 && rows[j].d > tmp.d) { rows[j + 1] = rows[j]; --j; }
+                        rows[j + 1] = tmp;
+                    }
                 }
                 for (int i = 0; i < total && i < 500; ++i) {
                     const Row& r = rows[i];

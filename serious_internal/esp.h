@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 
 namespace esp {
     extern bool  g_enabled;
@@ -8,9 +9,12 @@ namespace esp {
     extern float g_maxDist;
     extern bool  g_hideStaged;
     extern int   g_cached;
-    extern int   g_wglCalls;
-    extern int   g_gdiCalls;
-    extern int   g_vpW, g_vpH;
+    extern int   g_hookMode;
+    extern float g_boxH;
+    extern float g_boxW;
+    extern float g_boxHS;
+    extern int   g_tgtOk;
+    extern int   g_tgtAll;
 
     bool Init();
     void Shutdown();

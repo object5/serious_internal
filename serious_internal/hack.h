@@ -39,4 +39,6 @@ namespace hack {
     bool      IsEnemy(uintptr_t entity);
     int       GetClassChain(uintptr_t entity, char out[][72], int maxDepth);
     bool      GetEntityPos(uintptr_t entity, float out[3]); // en_plPlacement
+    bool      GetEntityBox(uintptr_t entity, float mins[3], float maxs[3]); // en_boxSpatialClassification (object space)
+    bool      GetEntityMatrix(uintptr_t entity, float m[9]); // en_mRotation
 }

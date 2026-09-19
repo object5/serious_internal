@@ -60,6 +60,10 @@
     <ClCompile Include="..\deps\minhook\src\trampoline.c">
       <Filter>deps\minhook\src</Filter>
     </ClCompile>
+    <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="esp.cpp" />
+    <ClCompile Include="hack.cpp" />
+    <ClCompile Include="menu.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\deps\imgui\backends\imgui_impl_dx11.h">
@@ -110,5 +114,8 @@
     <ClInclude Include="..\deps\minhook\src\trampoline.h">
       <Filter>deps\minhook\src</Filter>
     </ClInclude>
+    <ClInclude Include="esp.h" />
+    <ClInclude Include="hack.h" />
+    <ClInclude Include="menu.h" />
   </ItemGroup>
 </Project>

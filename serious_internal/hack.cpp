@@ -218,6 +218,34 @@ namespace hack {
 #endif
 	}
 
+	bool GetEntityMatrix(uintptr_t entity, float m[9])
+	{
+		if (!entity || !m) return false;
+#ifdef _WIN64
+		return readBuf(entity + 0x3C, m, 9 * sizeof(float));
+#else
+		return readBuf(entity + 0x38, m, 9 * sizeof(float));
+#endif
+	}
+
+	bool GetEntityBox(uintptr_t entity, float mins[3], float maxs[3])
+	{
+		if (!entity || !mins || !maxs) return false;
+		float box[6];
+#ifdef _WIN64
+		if (!readBuf(entity + 0x84, box, sizeof box)) return false;
+#else
+		if (!readBuf(entity + 0x70, box, sizeof box)) return false;
+#endif
+		float dx = box[3] - box[0], dy = box[4] - box[1], dz = box[5] - box[2];
+		if (dx < 0.05f || dx > 100.0f) return false;
+		if (dy < 0.05f || dy > 100.0f) return false;
+		if (dz < 0.05f || dz > 100.0f) return false;
+		memcpy(mins, box, 3 * sizeof(float));
+		memcpy(maxs, box + 3, 3 * sizeof(float));
+		return true;
+	}
+
 
 
 	struct ClassOffs { uintptr_t pec, name, base; };
