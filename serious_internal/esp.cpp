@@ -150,20 +150,33 @@ namespace esp {
     }
 
     template <typename T>
-    static bool readMem(uintptr_t addr, T& v)
+    static __forceinline bool readMem(uintptr_t addr, T& v)
     {
         if (!addr) return false;
-        SIZE_T done = 0;
-        return ReadProcessMemory(GetCurrentProcess(), (LPCVOID)addr, &v, sizeof v, &done)
-            && done == sizeof v;
+        __try {
+            memcpy(&v, (const void*)addr, sizeof v);
+            return true;
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            v = T{};
+            return false;
+        }
+    }
+
+    static __forceinline bool readBuf(uintptr_t addr, void* buf, SIZE_T size)
+    {
+        if (!addr || !buf || !size) return false;
+        __try {
+            memcpy(buf, (const void*)addr, size);
+            return true;
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
     }
 
     static bool PlayerBasis(uintptr_t player, Vec& fwd, Vec& right, Vec& up)
     {
         float m[9];
-        SIZE_T done = 0;
-        if (!player || !ReadProcessMemory(GetCurrentProcess(), (LPCVOID)(player + 0x3C),
-                m, sizeof m, &done) || done != sizeof m)
+        if (!player || !readBuf(player + 0x3C, m, sizeof m))
             return false;
         right = { m[0], m[3], m[6] };
         up    = { m[1], m[4], m[7] };

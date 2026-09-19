@@ -8,28 +8,50 @@ namespace hack {
 	static bool god = false;
 
 	template <typename T>
-	static bool readMem(uintptr_t addr, T& v)
+	static __forceinline bool readMem(uintptr_t addr, T& v)
 	{
 		if (!addr) return false;
-		SIZE_T done = 0;
-		return ReadProcessMemory(GetCurrentProcess(), (LPCVOID)addr, &v, sizeof v, &done)
-			&& done == sizeof v;
+		__try {
+			memcpy(&v, (const void*)addr, sizeof v);
+			return true;
+		} __except (EXCEPTION_EXECUTE_HANDLER) {
+			v = T{};
+			return false;
+		}
 	}
 
-	static bool readBuf(uintptr_t addr, void* buf, SIZE_T size)
+	static __forceinline bool readBuf(uintptr_t addr, void* buf, SIZE_T size)
 	{
 		if (!addr || !buf || !size) return false;
-		SIZE_T done = 0;
-		return ReadProcessMemory(GetCurrentProcess(), (LPCVOID)addr, buf, size, &done)
-			&& done == size;
+		__try {
+			memcpy(buf, (const void*)addr, size);
+			return true;
+		} __except (EXCEPTION_EXECUTE_HANDLER) {
+			return false;
+		}
 	}
 
-	static bool writeMem(uintptr_t addr, const void* buf, SIZE_T size)
+	static __forceinline bool writeMem(uintptr_t addr, const void* buf, SIZE_T size)
 	{
 		if (!addr || !buf || !size) return false;
-		SIZE_T done = 0;
-		return WriteProcessMemory(GetCurrentProcess(), (LPVOID)addr, buf, size, &done)
-			&& done == size;
+		__try {
+			memcpy((void*)addr, buf, size);
+			return true;
+		} __except (EXCEPTION_EXECUTE_HANDLER) {
+			DWORD old = 0;
+			if (!VirtualProtect((LPVOID)addr, size, PAGE_EXECUTE_READWRITE, &old))
+				return false;
+			__try {
+				memcpy((void*)addr, buf, size);
+			} __except (EXCEPTION_EXECUTE_HANDLER) {
+				DWORD tmp = 0;
+				VirtualProtect((LPVOID)addr, size, old, &tmp);
+				return false;
+			}
+			DWORD tmp = 0;
+			VirtualProtect((LPVOID)addr, size, old, &tmp);
+			return true;
+		}
 	}
 
 	static bool readText(uintptr_t addr, char* out, int len)
