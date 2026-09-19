@@ -12,7 +12,7 @@ static DWORD WINAPI MainThread(LPVOID)
     OutputDebugStringA("[serious_internal] loaded\n");
 
     for (;;) {
-        Sleep(50);
+        Sleep(5);
 
         if ((GetAsyncKeyState(VK_INSERT) & 1) && menuOk)
             menu::Toggle();
@@ -22,6 +22,11 @@ static DWORD WINAPI MainThread(LPVOID)
 
         if (GetAsyncKeyState(VK_F5) & 1)
             hack::SetGodMode(!hack::IsGodMode());
+
+        if (GetAsyncKeyState(VK_F7) & 1)
+            hack::SetRapidFire(!hack::IsRapidFire());
+
+        hack::RapidFireTick();
 
         if (hack::IsGodMode()) {
             float hp = hack::GetHealth();

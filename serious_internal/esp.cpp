@@ -1,4 +1,4 @@
-#include "esp.h"
+﻿#include "esp.h"
 #include "hack.h"
 
 #include <Windows.h>
@@ -121,15 +121,15 @@ namespace esp {
     static Vec LerpEntPos(uintptr_t e, const Vec& raw)
     {
         double now = NowSec();
-        EntLerp& s = sEnt[(e >> 4) & 1023];
+        EntLerp& s = sEnt[(e >> 4) & 1023]; // entpos history 
         if (!s.init || s.e != e) {
             s.e = e; s.prev = raw; s.curr = raw;
-            s.tPrev = now; s.tCurr = now; s.period = 0.05; s.init = true;
+            s.tPrev = now; s.tCurr = now; s.period = 0.05;  s.init = true; // 20hz period
             return raw;
         }
         float dx = raw.x - s.curr.x, dy = raw.y - s.curr.y, dz = raw.z - s.curr.z;
         float d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 > 1e-10f) {
+        if (d2 > 1e-10f) { // пять метров за раз если двинулся то это реюз адреса или респавн яхз
             double dt = now - s.tCurr;
             if (d2 > 25.0f || dt <= 0.0) {
                 s.prev = raw; s.curr = raw; s.tPrev = now; s.tCurr = now;
@@ -146,7 +146,7 @@ namespace esp {
         float t = (float)f;
         return { s.prev.x + (s.curr.x - s.prev.x) * t,
                  s.prev.y + (s.curr.y - s.prev.y) * t,
-                 s.prev.z + (s.curr.z - s.prev.z) * t };
+                 s.prev.z + (s.curr.z - s.prev.z) * t }; // линейная интерполяция от прошлой к настоящей
     }
 
     template <typename T>
@@ -173,12 +173,22 @@ namespace esp {
 
     static bool ViewBasis(uintptr_t player, Vec& fwd, Vec& right, Vec& up)
     {
-        float bodyH = 0, relH = 0, pitch = 0;
+        float yaw = 0, pitch = 0;
+#ifdef _WIN64
+        float bodyH = 0, relH = 0;
         if (!readMem(player + 0x30, bodyH)) return false;
         if (!readMem(player + 0x3CC, relH)) return false;
         if (!readMem(player + 0x3D0, pitch)) return false;
+        yaw = bodyH + relH;
+#else
+        float bodyH = 0, relH = 0;
+        if (!readMem(player + 0x2C, bodyH)) return false;
+        if (!readMem(player + 0x35C, relH)) return false;
+        if (!readMem(player + 0x360, pitch)) return false;
+        yaw = bodyH + relH;
+#endif
         const float r = 3.14159265f / 180.0f;
-        float h = (bodyH + relH) * r, p = pitch * r;
+        float h = yaw * r, p = pitch * r;
         float ch = cosf(h), sh = sinf(h), cp = cosf(p), sp = sinf(p);
         fwd   = { -sh * cp, sp, -ch * cp };
         right = { ch, 0.0f, -sh };

@@ -1,6 +1,7 @@
 ﻿#include "hack.h"
 #include <Windows.h>
 #include <cstring>
+#include <cstdio>
 
 namespace hack {
 
@@ -46,20 +47,91 @@ namespace hack {
 		return true;
 	}
 
+#ifdef _WIN64
 	static uintptr_t entitiesBase()
 	{
 		HMODULE h = GetModuleHandleA("EntitiesMP.dll");
 		if (!h) h = GetModuleHandleA("Entities.dll");
 		return (uintptr_t)h;
 	}
+#endif
+
+#ifndef _WIN64
+	static uintptr_t scanEngine(const unsigned char* pat, const char* mask)
+	{
+		HMODULE h = GetModuleHandleA("Engine.dll");
+		if (!h) return 0;
+		PIMAGE_DOS_HEADER dos = (PIMAGE_DOS_HEADER)h;
+		if (dos->e_magic != IMAGE_DOS_SIGNATURE) return 0;
+		PIMAGE_NT_HEADERS nt = (PIMAGE_NT_HEADERS)((uintptr_t)h + dos->e_lfanew);
+		if (nt->Signature != IMAGE_NT_SIGNATURE) return 0;
+		uintptr_t base = (uintptr_t)h;
+		uintptr_t end = base + nt->OptionalHeader.SizeOfImage;
+		size_t n = strlen(mask);
+		MEMORY_BASIC_INFORMATION mi{};
+		for (uintptr_t p = base; p < end;) {
+			if (!VirtualQuery((LPCVOID)p, &mi, sizeof mi)) break;
+			uintptr_t q0 = (uintptr_t)mi.BaseAddress;
+			uintptr_t q1 = q0 + mi.RegionSize;
+			if (q0 < base) q0 = base;
+			if (q1 > end) q1 = end;
+			DWORD pr = mi.Protect & 0xFF;
+			bool rd = (mi.State == MEM_COMMIT) && !(mi.Protect & (PAGE_NOACCESS | PAGE_GUARD))
+				&& (pr == PAGE_READONLY || pr == PAGE_READWRITE || pr == PAGE_EXECUTE_READ
+					|| pr == PAGE_EXECUTE_READWRITE || pr == PAGE_EXECUTE_WRITECOPY);
+			if (rd && q1 > q0 + n) {
+				for (uintptr_t a = q0; a + n <= q1; ++a) {
+					bool ok = true;
+					for (size_t i = 0; i < n; ++i) {
+						if (mask[i] == 'x' && ((unsigned char*)a)[i] != pat[i]) { ok = false; break; }
+					}
+					if (ok) return a;
+				}
+			}
+			p = (uintptr_t)mi.BaseAddress + mi.RegionSize;
+		}
+		return 0;
+	}
+
+	static uintptr_t g_pNetworkAddr = 0;
+
+	static uintptr_t steamLocalPlayer()
+	{
+		if (!g_pNetworkAddr) {
+			static const unsigned char pat[] = { 0x8B, 0x0D, 0, 0, 0, 0, 0x83, 0xC4, 0x08, 0xE8, 0, 0, 0, 0, 0x85, 0xC0 };
+			uintptr_t m = scanEngine(pat, "xx????xxxx????xx");
+			if (!m) return 0;
+			uintptr_t disp = 0;
+			if (!readMem(m + 2, disp) || !disp) return 0;
+			g_pNetworkAddr = disp;
+		}
+		uintptr_t net = 0, ses = 0, arr = 0, pen = 0;
+		int active = 0;
+		if (!readMem(g_pNetworkAddr, net) || !net) return 0;
+		if (!readMem(net + 0x20, ses) || !ses) return 0;
+		if (!readMem(ses + 0x4, arr) || !arr) return 0;
+		if (!readMem(arr + 0x0, active) || !active) return 0;
+		if (!readMem(arr + 0x4, pen) || !pen) return 0;
+		return pen;
+	}
+#endif
 
 	uintptr_t GetLocalPlayer()
 	{
+#ifdef _WIN64
 		uintptr_t base = entitiesBase();
 		if (!base) return 0;
 		uintptr_t player = 0;
 		readMem(base + kPlayerPtrOffset, player);
 		return player;
+#else
+		uintptr_t p = steamLocalPlayer();
+		if (!p || GetEntityId(p) < 0) return 0;
+		uintptr_t w = 0;
+		readMem(p + kWorldOffset, w);
+		if (!w) return 0;
+		return p;
+#endif
 	}
 
 	bool IsPlayerValid()
@@ -214,7 +286,7 @@ namespace hack {
 #ifdef _WIN64
 		return readBuf(entity + 0x24, out, 3 * sizeof(float));
 #else
-		return readBuf(entity + 0x28, out, 3 * sizeof(float));
+		return readBuf(entity + 0x20, out, 3 * sizeof(float));
 #endif
 	}
 
@@ -507,5 +579,245 @@ namespace hack {
 			pdec = base;
 		}
 		return out;
+	}
+
+	static bool rapid = false;
+	void SetRapidFire(bool on) { rapid = on; }
+	bool IsRapidFire() { return rapid; }
+
+	static uintptr_t g_wpnEntity = 0;
+	static uintptr_t g_wpnPec = 0;
+	static int g_wpnOff = -1;
+
+	static uintptr_t findWeaponsEntity(uintptr_t player)
+	{
+		if (!player || !resolveClassOffsets(player)) return 0;
+#ifdef _WIN64
+		const uintptr_t kPecOff = 0x60, stride = 48, offName = 24, offOff = 20, offType = 0;
+#else
+		const uintptr_t kPecOff = 0x5C, stride = 32, offName = 16, offOff = 12, offType = 0;
+#endif
+		uintptr_t pec = 0, pdec = 0;
+		if (!readMem(player + kPecOff, pec) || !pec) return 0;
+		if (!readMem(pec + g_coffs.pec, pdec) || !pdec) return 0;
+		if (pec == g_wpnPec && g_wpnEntity && g_wpnOff >= 0) {
+			uintptr_t cur = 0;
+			if (readMem(player + (uintptr_t)g_wpnOff, cur) && cur == g_wpnEntity
+				&& GetEntityId(g_wpnEntity) >= 0)
+				return g_wpnEntity;
+		}
+		g_wpnEntity = 0;
+		g_wpnPec = 0;
+		g_wpnOff = -1;
+		for (int pass = 0; pass < 2; ++pass) {
+			uintptr_t lvl = pdec;
+			for (int depth = 0; depth < 8 && lvl; ++depth) {
+				uintptr_t arr = 0, base = 0;
+				int ct = 0;
+#ifdef _WIN64
+				if (!readMem(lvl + 0, arr) || !readMem(lvl + 8, ct)) break;
+				readMem(lvl + g_coffs.base, base);
+#else
+				if (!readMem(lvl + 0, arr) || !readMem(lvl + 4, ct)) break;
+				readMem(lvl + 36, base);
+#endif
+				if (ct <= 0 || ct >= 5000 || !arr) break;
+				for (int i = 0; i < ct; ++i) {
+					uintptr_t pr = arr + (uintptr_t)i * stride;
+					int tp = -1, off = -1;
+					uintptr_t nm = 0, v = 0;
+					if (!readMem(pr + offType, tp) || tp != 7) continue;
+					if (!readMem(pr + offOff, off) || off < 0 || off > 4096) continue;
+					if (pass == 0) {
+						if (!readMem(pr + offName, nm)) continue;
+						char buf[72];
+						if (!readText(nm, buf, sizeof buf)) continue;
+						if (strcmp(buf, "Weapons") != 0) continue;
+					}
+					if (!readMem(player + (uintptr_t)off, v) || !v) continue;
+					if (pass == 1) {
+						char cls[72];
+						if (!GetEntityClassName(v, cls, sizeof cls)) continue;
+						if (strcmp(cls, "Player Weapons") != 0) continue;
+					}
+					g_wpnEntity = v;
+					g_wpnPec = pec;
+					g_wpnOff = off;
+					return v;
+				}
+				lvl = base;
+			}
+		}
+		return 0;
+	}
+
+	static int g_ammoCur[6] = { -1, -1, -1, -1, -1, -1 };
+	static int g_ammoMax[6] = { -1, -1, -1, -1, -1, -1 };
+	static uintptr_t g_ammoPec = 0;
+	static bool g_ammoDone = false;
+
+	static void resolveAmmo(uintptr_t weapons)
+	{
+		for (int i = 0; i < 6; ++i) { g_ammoCur[i] = -1; g_ammoMax[i] = -1; }
+		if (!weapons || !resolveClassOffsets(weapons)) return;
+#ifdef _WIN64
+		const uintptr_t kPecOff = 0x60, stride = 48, offOff = 20, offType = 0;
+#else
+		const uintptr_t kPecOff = 0x5C, stride = 32, offOff = 12, offType = 0;
+#endif
+		uintptr_t pec = 0, pdec = 0;
+		if (!readMem(weapons + kPecOff, pec) || !pec) return;
+		if (!readMem(pec + g_coffs.pec, pdec) || !pdec) return;
+		static const int curId[6] = { 40, 42, 44, 46, 50, 52 };
+		static const int maxId[6] = { 41, 43, 45, 47, 51, 53 };
+		uintptr_t lvl = pdec;
+		for (int depth = 0; depth < 8 && lvl; ++depth) {
+			uintptr_t arr = 0, base = 0;
+			int ct = 0;
+#ifdef _WIN64
+			if (!readMem(lvl + 0, arr) || !readMem(lvl + 8, ct)) break;
+			readMem(lvl + g_coffs.base, base);
+#else
+			if (!readMem(lvl + 0, arr) || !readMem(lvl + 4, ct)) break;
+			readMem(lvl + 36, base);
+#endif
+			if (ct <= 0 || ct >= 5000 || !arr) break;
+			for (int i = 0; i < ct; ++i) {
+				uintptr_t pr = arr + (uintptr_t)i * stride;
+				int tp = -1, off = -1;
+				unsigned id = 0;
+				if (!readMem(pr + offType, tp) || tp != 9) continue;
+				if (!readMem(pr + offOff, off) || off < 0 || off > 4096) continue;
+				if (!readMem(pr + 16, id)) continue;
+				id &= 0xFF;
+				for (int k = 0; k < 6; ++k) {
+					if (g_ammoCur[k] < 0 && (int)id == curId[k]) g_ammoCur[k] = off;
+					if (g_ammoMax[k] < 0 && (int)id == maxId[k]) g_ammoMax[k] = off;
+				}
+			}
+			lvl = base;
+		}
+	}
+
+	static void topUpAmmo(uintptr_t weapons)
+	{
+		if (!weapons) return;
+		uintptr_t pec = 0;
+#ifdef _WIN64
+		if (!readMem(weapons + 0x60, pec) || !pec) return;
+#else
+		if (!readMem(weapons + 0x5C, pec) || !pec) return;
+#endif
+		if (!g_ammoDone || pec != g_ammoPec) {
+			resolveAmmo(weapons);
+			g_ammoPec = pec;
+			g_ammoDone = true;
+		}
+		for (int i = 0; i < 6; ++i) {
+			if (g_ammoCur[i] < 0 || g_ammoMax[i] < 0) continue;
+			int maxV = 0;
+			if (!readMem(weapons + (uintptr_t)g_ammoMax[i], maxV) || maxV < 1 || maxV > 1000) continue;
+			int curV = 0;
+			if (!readMem(weapons + (uintptr_t)g_ammoCur[i], curV)) continue;
+			if (curV >= 0 && curV < maxV) writeMem(weapons + (uintptr_t)g_ammoCur[i], &maxV, sizeof maxV);
+		}
+	}
+
+	static int g_rayOff = -1;
+	static uintptr_t g_rayPec = 0;
+
+	uintptr_t GetRayHit()
+	{
+		uintptr_t player = GetLocalPlayer();
+		uintptr_t weapons = findWeaponsEntity(player);
+		if (!weapons) return 0;
+		uintptr_t pec = 0;
+		if (!readMem(weapons +
+#ifdef _WIN64
+			0x60
+#else
+			0x5C
+#endif
+			, pec) || !pec) return 0;
+		if (pec != g_rayPec || g_rayOff < 0) {
+			g_rayOff = -1;
+			g_rayPec = pec;
+			if (!resolveClassOffsets(weapons)) return 0;
+#ifdef _WIN64
+			const uintptr_t stride = 48, offOff = 20, offType = 0;
+#else
+			const uintptr_t stride = 32, offOff = 12, offType = 0;
+#endif
+			uintptr_t pdec = 0;
+			if (!readMem(pec + g_coffs.pec, pdec) || !pdec) return 0;
+			uintptr_t lvl = pdec;
+			for (int depth = 0; depth < 8 && lvl && g_rayOff < 0; ++depth) {
+				uintptr_t arr = 0, base = 0;
+				int ct = 0;
+#ifdef _WIN64
+				if (!readMem(lvl + 0, arr) || !readMem(lvl + 8, ct)) break;
+				readMem(lvl + g_coffs.base, base);
+#else
+				if (!readMem(lvl + 0, arr) || !readMem(lvl + 4, ct)) break;
+				readMem(lvl + 36, base);
+#endif
+				if (ct <= 0 || ct >= 5000 || !arr) break;
+				for (int i = 0; i < ct; ++i) {
+					uintptr_t pr = arr + (uintptr_t)i * stride;
+					int tp = -1, off = -1;
+					unsigned id = 0;
+					if (!readMem(pr + offType, tp) || tp != 7) continue;
+					if (!readMem(pr + offOff, off) || off < 0 || off > 4096) continue;
+					if (!readMem(pr + 16, id) || (id & 0xFF) != 30) continue;
+					g_rayOff = off;
+					break;
+				}
+				lvl = base;
+			}
+		}
+		if (g_rayOff < 0) return 0;
+		uintptr_t hit = 0;
+		readMem(weapons + (uintptr_t)g_rayOff, hit);
+		return hit;
+	}
+
+	void RapidFireTick()
+	{
+		if (!rapid) return;
+#ifdef _WIN64
+		const uintptr_t kTimerOff = 0x128, kNodeOff = 0x118, kIdOff = 0x20;
+#else
+		const uintptr_t kTimerOff = 0xD8, kNodeOff = 0xD0, kIdOff = 0x1C;
+#endif
+		uintptr_t player = GetLocalPlayer();
+		uintptr_t weapons = findWeaponsEntity(player);
+		if (!weapons) return;
+		float t = -1.0f;
+		if (!readMem(weapons + kTimerOff, t)) return;
+		if (t > 10.0f && t < 1000000.0f) {
+			float z = 0.0f;
+			writeMem(weapons + kTimerOff, &z, sizeof z);
+			uintptr_t world = GetWorld();
+			uintptr_t node = weapons + kNodeOff;
+			for (int s = 0; s < 64; ++s) {
+				uintptr_t pred = 0;
+#ifdef _WIN64
+				if (!readMem(node + 8, pred) || !pred) break;
+#else
+				if (!readMem(node + 4, pred) || !pred) break;
+#endif
+				if (world && pred >= world && pred < world + 0x8000) break;
+				if (pred < kNodeOff) break;
+				uintptr_t ent = pred - kNodeOff;
+				int id = -1;
+				if (!readMem(ent + kIdOff, id) || id <= 0 || id >= 1000000) break;
+				float tt = 0.0f;
+				if (!readMem(ent + kTimerOff, tt) || tt <= 0.0f || tt > t) break;
+				float z2 = 0.0f;
+				writeMem(ent + kTimerOff, &z2, sizeof z2);
+				node = pred;
+			}
+		}
+		topUpAmmo(weapons);
 	}
 }

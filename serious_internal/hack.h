@@ -5,7 +5,11 @@
 namespace hack {
  
     static const uintptr_t kPlayerPtrOffset = 0x001CA570;
-    static const uintptr_t kHpOffset = 0x110; // [player + 0x110] float
+#ifdef _WIN64
+    static const uintptr_t kHpOffset = 0x110;
+#else
+    static const uintptr_t kHpOffset = 0xCC;
+#endif
 
     uintptr_t GetLocalPlayer();
     bool      IsPlayerValid();
@@ -14,6 +18,9 @@ namespace hack {
 
     void      SetGodMode(bool on);
     bool      IsGodMode();
+    void      SetRapidFire(bool on);
+    bool      IsRapidFire();
+    void      RapidFireTick();
 
 #ifdef _WIN64
     static const uintptr_t kWorldOffset = 0xA8;  // en_pwoWorld 
@@ -32,6 +39,7 @@ namespace hack {
     bool      SetEntityHp(uintptr_t entity, float hp);
 
     uintptr_t GetEnemyTarget(uintptr_t entity);
+    uintptr_t GetRayHit();
     int       DumpEntityPtrProps(uintptr_t entity, char names[][72], uintptr_t vals[], int max);
     unsigned  GetEntityFlags(uintptr_t entity);  // en_ulFlags 
     int       GetEntityRenderType(uintptr_t entity); // en_RenderType

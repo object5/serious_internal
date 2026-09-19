@@ -120,6 +120,10 @@ namespace menu {
             if (ImGui::Checkbox("godmode", &god))
                 hack::SetGodMode(god);
 
+            bool rapid = hack::IsRapidFire();
+            if (ImGui::Checkbox("rapid fire", &rapid))
+                hack::SetRapidFire(rapid);
+
             if (ImGui::Button("set 200 hp", ImVec2(-1, 0)))
                 hack::SetHealth(200.f);
 
