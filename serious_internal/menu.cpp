@@ -2,348 +2,421 @@
 #include "hack.h"
 #include "esp.h"
 #include "aim.h"
-
-#include <d3d11.h>
-
-#include <cstdio>
-#include <cstdarg>
-#include <cmath>
-#include <cstring>
+#include "overlay.h"
 
 #include "imgui.h"
-#include "backends/imgui_impl_win32.h"
-#include "backends/imgui_impl_dx11.h"
 
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+#include <cstdio>
 
 namespace menu {
-    static constexpr int kMenuW = 470;
-    static constexpr int kMenuH = 680;
 
-    static bool   g_show = false;
-    static bool   g_unload = false;
-    static bool   g_running = false;
-    static HANDLE g_thread = nullptr;
-    static FILE*  g_log = nullptr;
+    static ImFont* s_mono = nullptr;
+    static int     s_activeTab = 0;
 
-    static HWND   g_menuWnd = nullptr;
-    static HWND   g_game = nullptr;
-
-    static ID3D11Device*           g_dev = nullptr;
-    static ID3D11DeviceContext*    g_ctx = nullptr;
-    static IDXGISwapChain*         g_swap = nullptr;
-    static ID3D11RenderTargetView* g_rtv = nullptr;
-
-    struct FindCtx { DWORD pid; HWND hwnd; int area; };
-    static BOOL CALLBACK EnumCb(HWND hwnd, LPARAM lp)
+    void InitFonts()
     {
-        auto* ctx = reinterpret_cast<FindCtx*>(lp);
-        DWORD pid = 0;
-        GetWindowThreadProcessId(hwnd, &pid);
-        if (pid != ctx->pid) return TRUE;
-        if (hwnd == g_menuWnd) return TRUE;
-        if (!IsWindowVisible(hwnd)) return TRUE;
-        if (GetWindow(hwnd, GW_OWNER) != nullptr) return TRUE;
-        RECT r{};
-        if (!GetClientRect(hwnd, &r)) return TRUE;
-        int area = (r.right - r.left) * (r.bottom - r.top);
-        if (area > ctx->area) { ctx->area = area; ctx->hwnd = hwnd; }
-        return TRUE;
-    }
-
-    static HWND FindGameWindow()
-    {
-        FindCtx ctx{ GetCurrentProcessId(), nullptr, 0 };
-        EnumWindows(EnumCb, reinterpret_cast<LPARAM>(&ctx));
-        return ctx.hwnd;
-    }
-
-    static LRESULT CALLBACK MenuWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
-    {
-        if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wp, lp))
-            return 1;
-        if (msg == WM_DESTROY) { PostQuitMessage(0); return 0; }
-        return DefWindowProc(hwnd, msg, wp, lp);
-    }
-
-    static bool CreateDevice()
-    {
-        DXGI_SWAP_CHAIN_DESC sd{};
-        sd.BufferCount = 2;
-        sd.BufferDesc.Width = kMenuW;
-        sd.BufferDesc.Height = kMenuH;
-        sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        sd.BufferDesc.RefreshRate.Numerator = 60;
-        sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        sd.OutputWindow = g_menuWnd;
-        sd.SampleDesc.Count = 1;
-        sd.Windowed = TRUE;
-        sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-
-        const D3D_FEATURE_LEVEL lvls[] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0 };
-        D3D_FEATURE_LEVEL lvl;
-        if (!SUCCEEDED(D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
-                0, lvls, 2, D3D11_SDK_VERSION, &sd, &g_swap, &g_dev, &lvl, &g_ctx))) {
-            return false;
-        }
-        ID3D11Texture2D* back = nullptr;
-        if (SUCCEEDED(g_swap->GetBuffer(0, IID_PPV_ARGS(&back)))) {
-            g_dev->CreateRenderTargetView(back, nullptr, &g_rtv);
-            back->Release();
-        }
-        return g_rtv != nullptr;
-    }
-
-    static void DrawMenu()
-    {
+        if (s_mono) return;
         ImGuiIO& io = ImGui::GetIO();
-        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(io.DisplaySize, ImGuiCond_Always);
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize
-            | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
-        ImGui::Begin("sam", nullptr, flags);
+        static const char* candidates[] = {
+            "c:\\Windows\\Fonts\\consola.ttf",
+            "c:\\Windows\\Fonts\\lucon.ttf",
+        };
+        for (const char* p : candidates) {
+            FILE* f = nullptr;
+            if (fopen_s(&f, p, "rb") == 0 && f) {
+                fclose(f);
+                s_mono = io.Fonts->AddFontFromFileTTF(p, 17.0f);
+                if (s_mono) break;
+            }
+        }
+    }
 
-        ImGui::TextUnformatted("serious sam internal");
-        ImGui::SameLine(ImGui::GetWindowWidth() - 60.0f);
-        if (ImGui::SmallButton("hide")) g_show = false;
+    void ResetFonts() { s_mono = nullptr; }
 
-        uintptr_t player = hack::GetLocalPlayer();
-        float hp = hack::GetHealth();
+    static ImU32 COL_HEADER_BG()     { return IM_COL32(33, 43, 22, 255); }
+    static ImU32 COL_TAB_ACTIVE_BG() { return IM_COL32(22, 26, 14, 255); }
+    static ImU32 COL_BORDER()        { return IM_COL32(74, 94, 42, 255); }
+    static ImU32 COL_LINE()          { return IM_COL32(58, 76, 34, 255); }
+    static ImU32 COL_TEXT_DIM()      { return IM_COL32(88, 106, 56, 255); }
+    static ImU32 COL_TEXT_MID()      { return IM_COL32(122, 158, 68, 255); }
+    static ImU32 COL_TEXT_BRIGHT()   { return IM_COL32(178, 224, 74, 255); }
+    static ImU32 COL_BAR_FILL()      { return IM_COL32(106, 134, 70, 255); }
+    static ImU32 COL_BAR_BG()        { return IM_COL32(24, 28, 15, 255); }
+    static ImU32 COL_BAR_DOT()       { return IM_COL32(80, 98, 52, 255); }
+    static ImU32 COL_BTN_GREEN()     { return IM_COL32(96, 140, 66, 255); }
+    static ImU32 COL_BTN_GOLD()      { return IM_COL32(158, 128, 42, 255); }
+    static ImU32 COL_BTN_RED()       { return IM_COL32(158, 74, 84, 255); }
 
-        if (!ImGui::BeginTabBar("tabs")) { ImGui::End(); return; }
+    static int ActiveCount()
+    {
+        int n = 0;
+        if (hack::IsGodMode()) n++;
+        if (hack::IsRapidFire()) n++;
+        if (esp::g_enabled) n++;
+        if (aim::g_enabled) n++;
+        return n;
+    }
 
-        if (ImGui::BeginTabItem("Main")) {
-            ImGui::Text("player: 0x%p  HP: %.0f", (void*)player, hp);
-            if (player == 0)
-                ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "player not found");
+    static void Checkbox(const char* label, bool* v)
+    {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 cur = ImGui::GetCursorScreenPos();
+        float w = ImGui::GetContentRegionAvail().x;
+        float h = 26.0f;
 
-            bool god = hack::IsGodMode();
-            if (ImGui::Checkbox("godmode", &god))
-                hack::SetGodMode(god);
+        bool hovered = ImGui::IsMouseHoveringRect(cur, ImVec2(cur.x + w, cur.y + h));
+        if (hovered) {
+            dl->AddRectFilled(cur, ImVec2(cur.x + w, cur.y + h), IM_COL32(26, 32, 16, 255));
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+        if (hovered && ImGui::IsMouseClicked(0))
+            *v = !*v;
 
-            bool rapid = hack::IsRapidFire();
-            if (ImGui::Checkbox("rapid fire", &rapid))
-                hack::SetRapidFire(rapid);
+        ImU32 col = *v ? COL_TEXT_BRIGHT() : COL_TEXT_DIM();
+        char buf[64];
+        snprintf(buf, sizeof(buf), "[%c]", *v ? 'x' : '_');
+        dl->AddText(ImVec2(cur.x + 2, cur.y + 4), col, buf);
+        dl->AddText(ImVec2(cur.x + 36, cur.y + 4), col, label);
 
-            if (ImGui::Button("set 200 hp", ImVec2(-1, 0)))
-                hack::SetHealth(200.f);
+        ImGui::Dummy(ImVec2(w, h));
+    }
 
-            bool esp = esp::g_enabled;
-            if (ImGui::Checkbox("esp box", &esp)) esp::g_enabled = esp;
-            ImGui::SliderFloat("ESP FOV (as in game)", &esp::g_fov, 60.0f, 120.0f, "%.0f");
-            ImGui::Checkbox("hide staging (no target)", &esp::g_hideStaged);
-            ImGui::Text("drawn: %d cached: %d tgt: %d/%d",
-                esp::g_drawn, esp::g_cached, esp::g_tgtOk, esp::g_tgtAll);
-            ImGui::RadioButton("hook both", &esp::g_hookMode, 0); ImGui::SameLine();
-            ImGui::RadioButton("wgl", &esp::g_hookMode, 1); ImGui::SameLine();
-            ImGui::RadioButton("gdi", &esp::g_hookMode, 2);
-            if (ImGui::Button("UNLOAD", ImVec2(-1, 0)))
-                g_unload = true;
-            ImGui::EndTabItem();
+    static void SliderBar(const char* label, int* val, int v_min, int v_max, const char* suffix = "")
+    {
+        {
+            ImVec2 cur = ImGui::GetCursorScreenPos();
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            dl->AddText(cur, COL_TEXT_MID(), label);
+            ImVec2 sz = ImGui::CalcTextSize(label);
+            char vb[32];
+            snprintf(vb, sizeof(vb), "%d%s", *val, suffix);
+            dl->AddText(ImVec2(cur.x + sz.x + 8, cur.y), COL_TEXT_BRIGHT(), vb);
+            ImGui::Dummy(ImVec2(0, 19));
         }
 
-        if (ImGui::BeginTabItem("Aim")) {
-            ImGui::Checkbox("aimbot enabled", &aim::g_enabled);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 cur = ImGui::GetCursorScreenPos();
+        float bar_w = 172.0f;
+        float bar_h = 19.0f;
+
+        float t = (float)(*val - v_min) / (float)(v_max - v_min);
+        if (t < 0) t = 0; if (t > 1) t = 1;
+
+        dl->AddRectFilled(cur, ImVec2(cur.x + bar_w, cur.y + bar_h), COL_BAR_BG());
+        for (float y = cur.y + 3; y < cur.y + bar_h - 1; y += 5)
+            for (float x = cur.x + 3; x < cur.x + bar_w - 1; x += 5)
+                dl->AddRectFilled(ImVec2(x, y), ImVec2(x + 2, y + 2), COL_BAR_DOT());
+        float fw = bar_w * t;
+        if (fw > 0)
+            dl->AddRectFilled(cur, ImVec2(cur.x + fw, cur.y + bar_h), COL_BAR_FILL());
+
+        ImGui::InvisibleButton(label, ImVec2(bar_w, bar_h));
+        if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0)) {
+            ImVec2 mp = ImGui::GetIO().MousePos;
+            float nt = (mp.x - cur.x) / bar_w;
+            if (nt < 0) nt = 0; if (nt > 1) nt = 1;
+            *val = v_min + (int)(nt * (v_max - v_min) + 0.5f);
+        }
+        ImGui::Dummy(ImVec2(0, 6));
+    }
+
+    static void SliderBarF(const char* label, float* val, float v_min, float v_max)
+    {
+        {
+            ImVec2 cur = ImGui::GetCursorScreenPos();
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            dl->AddText(cur, COL_TEXT_MID(), label);
+            ImVec2 sz = ImGui::CalcTextSize(label);
+            char vb[32];
+            snprintf(vb, sizeof(vb), "%.1f", *val);
+            dl->AddText(ImVec2(cur.x + sz.x + 8, cur.y), COL_TEXT_BRIGHT(), vb);
+            ImGui::Dummy(ImVec2(0, 19));
+        }
+
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 cur = ImGui::GetCursorScreenPos();
+        float bar_w = 172.0f;
+        float bar_h = 19.0f;
+
+        float t = (*val - v_min) / (v_max - v_min);
+        if (t < 0) t = 0; if (t > 1) t = 1;
+
+        dl->AddRectFilled(cur, ImVec2(cur.x + bar_w, cur.y + bar_h), COL_BAR_BG());
+        for (float y = cur.y + 3; y < cur.y + bar_h - 1; y += 5)
+            for (float x = cur.x + 3; x < cur.x + bar_w - 1; x += 5)
+                dl->AddRectFilled(ImVec2(x, y), ImVec2(x + 2, y + 2), COL_BAR_DOT());
+        float fw = bar_w * t;
+        if (fw > 0)
+            dl->AddRectFilled(cur, ImVec2(cur.x + fw, cur.y + bar_h), COL_BAR_FILL());
+
+        ImGui::InvisibleButton(label, ImVec2(bar_w, bar_h));
+        if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0)) {
+            ImVec2 mp = ImGui::GetIO().MousePos;
+            float nt = (mp.x - cur.x) / bar_w;
+            if (nt < 0) nt = 0; if (nt > 1) nt = 1;
+            *val = v_min + nt * (v_max - v_min);
+        }
+        ImGui::Dummy(ImVec2(0, 6));
+    }
+
+    static bool Button(const char* label, ImU32 accent)
+    {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 cur = ImGui::GetCursorScreenPos();
+        ImVec2 sz(112, 28);
+        bool hovered = ImGui::IsMouseHoveringRect(cur, ImVec2(cur.x + sz.x, cur.y + sz.y));
+        ImU32 bg = hovered ? IM_COL32(34, 42, 20, 255) : IM_COL32(20, 24, 13, 255);
+        dl->AddRectFilled(cur, ImVec2(cur.x + sz.x, cur.y + sz.y), bg);
+        dl->AddRect(cur, ImVec2(cur.x + sz.x, cur.y + sz.y), accent, 0.0f, 0, 1.0f);
+        ImVec2 ts = ImGui::CalcTextSize(label);
+        dl->AddText(ImVec2(cur.x + (sz.x - ts.x) * 0.5f, cur.y + (sz.y - ts.y) * 0.5f), accent, label);
+        ImGui::Dummy(sz);
+        if (hovered) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        return hovered && ImGui::IsMouseClicked(0);
+    }
+
+    void Draw()
+    {
+        if (s_mono)
+            ImGui::PushFont(s_mono);
+
+        ImGui::SetNextWindowPos(ImVec2(16, 16), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(470, 640), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSizeConstraints(ImVec2(430, 500), ImVec2(600, 900));
+
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+                                 ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(74.f/255, 94.f/255, 42.f/255, 1));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(13.f/255, 15.f/255, 8.f/255, 1));
+
+        ImGui::Begin("##cheat_console", nullptr, flags);
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar(2);
+
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 win_pos = ImGui::GetWindowPos();
+        ImVec2 win_size = ImGui::GetWindowSize();
+        float W = win_size.x;
+
+        {
+            ImVec2 p0 = win_pos, p1 = ImVec2(win_pos.x + W, win_pos.y + 38);
+            dl->AddRectFilled(p0, p1, COL_HEADER_BG());
+            dl->AddLine(ImVec2(p0.x, p1.y), p1, COL_BORDER());
+            dl->AddText(ImVec2(p0.x + 12, p0.y + 9), COL_TEXT_BRIGHT(), "(*) CHEAT CONSOLE");
+
+            char cnt[32];
+            snprintf(cnt, sizeof(cnt), "[%d CHEATS ON]", ActiveCount());
+            ImVec2 ts = ImGui::CalcTextSize(cnt);
+            dl->AddText(ImVec2(p1.x - ts.x - 12, p0.y + 9), COL_TEXT_DIM(), cnt);
+            ImGui::Dummy(ImVec2(W, 38));
+        }
+
+        {
+            const char* tabs[] = { "PLAYER", "WEAPONS", "WORLD", "DEBUG" };
+            float tab_w = W / 4.0f;
+            float tab_h = 30.0f;
+            ImVec2 base = ImGui::GetCursorScreenPos();
+
+            for (int i = 0; i < 4; i++) {
+                ImVec2 p0(base.x + tab_w * i, base.y);
+                ImVec2 p1(p0.x + tab_w, p0.y + tab_h);
+                bool active = (s_activeTab == i);
+                bool hovered = ImGui::IsMouseHoveringRect(p0, p1);
+
+                if (active)
+                    dl->AddRectFilled(p0, p1, COL_TAB_ACTIVE_BG());
+                else if (hovered)
+                    dl->AddRectFilled(p0, p1, IM_COL32(18, 21, 11, 255));
+
+                ImU32 tc = active ? COL_TEXT_BRIGHT() : COL_TEXT_DIM();
+                char tbuf[32];
+                if (active) snprintf(tbuf, sizeof(tbuf), ">%s", tabs[i]);
+                else snprintf(tbuf, sizeof(tbuf), "%s", tabs[i]);
+                ImVec2 ts = ImGui::CalcTextSize(tbuf);
+                dl->AddText(ImVec2(p0.x + (tab_w - ts.x) * 0.5f, p0.y + 7), tc, tbuf);
+
+                if (i > 0)
+                    dl->AddLine(ImVec2(p0.x, p0.y + 6), ImVec2(p0.x, p1.y - 6), COL_LINE());
+
+                if (hovered && ImGui::IsMouseClicked(0))
+                    s_activeTab = i;
+            }
+            if (ImGui::IsMouseHoveringRect(base, ImVec2(base.x + W, base.y + tab_h)))
+                ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+            ImGui::Dummy(ImVec2(W, tab_h));
+            ImVec2 lp = ImGui::GetCursorScreenPos();
+            dl->AddLine(lp, ImVec2(lp.x + W, lp.y), COL_LINE());
+            ImGui::Dummy(ImVec2(0, 8));
+        }
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        float pad = 12.0f;
+
+        auto SectionTitle = [&](const char* t)
+        {
+            ImVec2 cur = ImGui::GetCursorScreenPos();
+            dl->AddText(ImVec2(cur.x + pad, cur.y), COL_TEXT_DIM(), t);
+            ImGui::Dummy(ImVec2(0, 20));
+        };
+
+        if (s_activeTab == 0)
+        {
+            SectionTitle("-- FLAGS --");
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+            ImGui::BeginGroup();
+            ImGui::PushItemWidth(W - pad * 2);
             {
-                static int keyIdx = 0;
-                const char* keys[] = { "RMB", "LMB", "SHIFT", "X1", "Always" };
-                if (ImGui::Combo("aim key", &keyIdx, keys, 5)) {
-                    static const int vk[] = { VK_RBUTTON, VK_LBUTTON, VK_SHIFT, VK_XBUTTON1, 0 };
-                    aim::g_key = vk[keyIdx];
-                }
+                bool god = hack::IsGodMode();
+                Checkbox("GOD MODE", &god);
+                if (god != hack::IsGodMode()) hack::SetGodMode(god);
             }
-            ImGui::SliderFloat("aim FOV", &aim::g_fov, 5.0f, 90.0f, "%.0f");
-            ImGui::SliderFloat("smooth", &aim::g_smooth, 1.0f, 20.0f, "%.1f");
-            ImGui::SliderFloat("max dist", &aim::g_maxDist, 0.0f, 500.0f, "%.0f");
-            ImGui::SliderFloat("aim height +", &aim::g_aimHeight, -2.0f, 3.0f, "%.2f");
-            ImGui::SliderFloat("eye height", &aim::g_eyeH, 0.5f, 3.0f, "%.2f");
-            ImGui::Checkbox("hide staging (no target)", &aim::g_hideStaged);
-            ImGui::Checkbox("turn body (not only head)", &aim::g_turnBody);
-            float yaw = 0, pitch = 0;
-            if (hack::GetViewAngles(yaw, pitch))
-                ImGui::Text("yaw: %.1f pitch: %.1f tgt: 0x%p", yaw, pitch, (void*)aim::g_target);
+            ImGui::PopItemWidth();
+            ImGui::EndGroup();
+
+            {
+                ImVec2 cur = ImGui::GetCursorScreenPos();
+                dl->AddLine(ImVec2(cur.x + pad, cur.y + 4), ImVec2(cur.x + W - pad, cur.y + 4), COL_LINE());
+                ImGui::Dummy(ImVec2(0, 12));
+            }
+
+            SectionTitle("-- STATS --");
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+            ImGui::BeginGroup();
+            {
+                float liveHp = hack::GetHealth();
+                int hp = liveHp < 0.f ? 0 : (int)(liveHp + 0.5f);
+                int hpPrev = hp;
+                SliderBar("HEALTH", &hp, 0, 200);
+                if (hp != hpPrev) hack::SetHealth((float)hp);
+            }
+            ImGui::EndGroup();
+
+            {
+                ImGui::Dummy(ImVec2(0, 2));
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+                if (Button("FULL HEAL", COL_BTN_GREEN())) hack::SetHealth(200.f);
+                ImGui::SameLine(0, 8);
+                if (Button("TOGGLE GOD", COL_BTN_GOLD())) hack::SetGodMode(!hack::IsGodMode());
+                ImGui::SameLine(0, 8);
+                if (Button("1HP DARE", COL_BTN_RED())) hack::SetHealth(1.f);
+                ImGui::Dummy(ImVec2(0, 6));
+            }
+        }
+        else if (s_activeTab == 1)
+        {
+            SectionTitle("-- FLAGS --");
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+            ImGui::BeginGroup();
+            ImGui::PushItemWidth(W - pad * 2);
+            {
+                bool rapid = hack::IsRapidFire();
+                Checkbox("RAPID FIRE", &rapid);
+                if (rapid != hack::IsRapidFire()) hack::SetRapidFire(rapid);
+            }
+            ImGui::PopItemWidth();
+            ImGui::EndGroup();
+
+            ImGui::Dummy(ImVec2(0, 8));
+            ImVec2 cur = ImGui::GetCursorScreenPos();
+            dl->AddText(ImVec2(cur.x + pad, cur.y), COL_TEXT_DIM(), "ammo tops up while rapid is on");
+            ImGui::Dummy(ImVec2(0, 300));
+        }
+        else if (s_activeTab == 2)
+        {
+            SectionTitle("-- ESP --");
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+            ImGui::BeginGroup();
+            ImGui::PushItemWidth(W - pad * 2);
+            Checkbox("ESP BOX", &esp::g_enabled);
+            Checkbox("HIDE STAGING", &esp::g_hideStaged);
+            SliderBarF("ESP FOV", &esp::g_fov, 60.0f, 120.0f);
+            SliderBarF("MAX DIST", &esp::g_maxDist, 0.0f, 500.0f);
+            ImGui::PopItemWidth();
+            ImGui::EndGroup();
+
+            {
+                char info[96];
+                snprintf(info, sizeof(info), "drawn: %d cached: %d tgt: %d/%d",
+                    esp::g_drawn, esp::g_cached, esp::g_tgtOk, esp::g_tgtAll);
+                ImVec2 c2 = ImGui::GetCursorScreenPos();
+                dl->AddText(ImVec2(c2.x + pad, c2.y), COL_TEXT_DIM(), info);
+                ImGui::Dummy(ImVec2(0, 22));
+            }
+
+            {
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+                int want = esp::g_hookMode;
+                if (Button("HOOK BOTH", want == 0 ? COL_BTN_GREEN() : COL_LINE())) want = 0;
+                ImGui::SameLine(0, 8);
+                if (Button("WGL", want == 1 ? COL_BTN_GREEN() : COL_LINE())) want = 1;
+                ImGui::SameLine(0, 8);
+                if (Button("GDI", want == 2 ? COL_BTN_GREEN() : COL_LINE())) want = 2;
+                esp::g_hookMode = want;
+                ImGui::Dummy(ImVec2(0, 6));
+            }
+        }
+        else
+        {
+            SectionTitle("-- AIMBOT --");
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+            ImGui::BeginGroup();
+            ImGui::PushItemWidth(W - pad * 2);
+            Checkbox("AIMBOT (HOLD KEY)", &aim::g_enabled);
+            Checkbox("TURN BODY", &aim::g_turnBody);
+            SliderBarF("AIM FOV", &aim::g_fov, 5.0f, 90.0f);
+            SliderBarF("SMOOTH", &aim::g_smooth, 1.0f, 20.0f);
+            SliderBarF("AIM DIST", &aim::g_maxDist, 0.0f, 500.0f);
+            ImGui::PopItemWidth();
+            ImGui::EndGroup();
+
+            {
+                uintptr_t player = hack::GetLocalPlayer();
+                float yaw = 0, pitch = 0;
+                hack::GetViewAngles(yaw, pitch);
+                char info[128];
+                snprintf(info, sizeof(info), "player: 0x%p hp: %.0f ents: %d tgt: 0x%p",
+                    (void*)player, hack::GetHealth(), hack::GetEntityCount(), (void*)aim::g_target);
+                ImVec2 c2 = ImGui::GetCursorScreenPos();
+                dl->AddText(ImVec2(c2.x + pad, c2.y), COL_TEXT_DIM(), info);
+                ImGui::Dummy(ImVec2(0, 22));
+            }
+
+            {
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+                if (Button("UNLOAD", COL_BTN_RED())) overlay::RequestUnload();
+                ImGui::Dummy(ImVec2(0, 6));
+            }
+        }
+        ImGui::PopStyleVar();
+
+        {
+            float footer_h = 30.0f;
+            float reserved = ImGui::GetWindowHeight() - footer_h;
+            float cy = ImGui::GetCursorPosY();
+            if (cy < reserved - 8)
+                ImGui::Dummy(ImVec2(0, reserved - 8 - cy));
+
+            ImVec2 fp = ImGui::GetCursorScreenPos();
+            fp.y = win_pos.y + win_size.y - footer_h;
+            dl->AddLine(ImVec2(win_pos.x, fp.y), ImVec2(win_pos.x + W, fp.y), COL_BORDER());
+            dl->AddRectFilled(ImVec2(win_pos.x, fp.y + 1), ImVec2(win_pos.x + W, win_pos.y + win_size.y), IM_COL32(15, 18, 9, 255));
+
+            if (hack::IsGodMode())
+                dl->AddText(ImVec2(win_pos.x + 12, fp.y + 7), COL_TEXT_MID(), "*** GOD MODE ***");
             else
-                ImGui::TextDisabled("no player");
-            ImGui::EndTabItem();
+                dl->AddText(ImVec2(win_pos.x + 12, fp.y + 7), COL_TEXT_DIM(), "--- READY ---");
+
+            const char* hint = "[INSERT] toggle";
+            ImVec2 ts = ImGui::CalcTextSize(hint);
+            dl->AddText(ImVec2(win_pos.x + W - ts.x - 12, fp.y + 7), COL_TEXT_DIM(), hint);
         }
 
-        if (ImGui::BeginTabItem("Entities")) {
-            int n = hack::GetEntityCount();
-            uintptr_t cont = hack::FindEntityContainer();
-            ImGui::Text("entities: %d  list: 0x%p", n, (void*)cont);
-            static bool aliveOnly = true;
-            ImGui::Checkbox("alive only (ENF_ALIVE)", &aliveOnly);
-            static bool enemiesOnly = true;
-            ImGui::Checkbox("enemies only (Enemy Base)", &enemiesOnly);
-            if (n <= 0) {
-                ImGui::TextDisabled("no list: load a level (not menu)");
-            } else if (ImGui::BeginChild("ents", ImVec2(0, 200), true)) {
-                struct Row { uintptr_t e; int id; float d; float hp; bool tgt; char cls[72]; };
-                static Row rows[2048];
-                static int total = 0;
-                static unsigned long long rowTick = 0;
-                unsigned long long now = GetTickCount64();
-                if (now - rowTick > 500 || total == 0) {
-                    rowTick = now;
-                    total = 0;
-                    float pp[3] = { 0, 0, 0 };
-                    uintptr_t playerEnt = hack::GetLocalPlayer();
-                    bool hasP = playerEnt && hack::GetEntityPos(playerEnt, pp);
-                    for (int i = 0; i < n && total < 2048; ++i) {
-                        uintptr_t e = hack::GetEntity(i);
-                        if (!e) continue;
-                        if (aliveOnly && !(hack::GetEntityFlags(e) & 8)) continue; // ENF_ALIVE
-                        if (enemiesOnly && !hack::IsEnemy(e)) continue;
-                        Row& r = rows[total++];
-                        r.e = e;
-                        r.id = hack::GetEntityId(e);
-                        r.hp = hack::GetEntityHp(e);
-                        r.tgt = hack::GetEnemyTarget(e) != 0;
-                        r.d = -1.f;
-                        float ep[3];
-                        if (hasP && hack::GetEntityPos(e, ep)) {
-                            float dx = ep[0] - pp[0], dy = ep[1] - pp[1], dz = ep[2] - pp[2];
-                            r.d = sqrtf(dx * dx + dy * dy + dz * dz);
-                        }
-                        if (!hack::GetEntityClassName(e, r.cls, sizeof(r.cls)))
-                            memcpy(r.cls, "?", 2);
-                    }
-                    for (int i = 1; i < total; ++i) {
-                        Row tmp = rows[i];
-                        int j = i - 1;
-                        while (j >= 0 && rows[j].d > tmp.d) { rows[j + 1] = rows[j]; --j; }
-                        rows[j + 1] = tmp;
-                    }
-                }
-                for (int i = 0; i < total && i < 500; ++i) {
-                    const Row& r = rows[i];
-                    if (esp::g_hideStaged && !r.tgt) continue; // staging 
-                    const char* tag = r.tgt ? "TGT" : "staging";
-                    if (r.d >= 0)
-                        ImGui::Text("%4d | id %d | hp %.0f | %.0fm | %s | %s", i, r.id, r.hp, r.d, tag, r.cls);
-                    else
-                        ImGui::Text("%4d | id %d | hp %.0f | ? | %s | %s", i, r.id, r.hp, tag, r.cls);
-                }
-                ImGui::EndChild();
-            }
-            ImGui::EndTabItem();
-        }
-
-        ImGui::EndTabBar();
         ImGui::End();
+
+        if (s_mono)
+            ImGui::PopFont();
     }
-
-    static DWORD WINAPI MenuThread(LPVOID)
-    {
-        WNDCLASSEXA wc{};
-        wc.cbSize = sizeof(wc);
-        wc.lpfnWndProc = MenuWndProc;
-        wc.hInstance = GetModuleHandleA(nullptr);
-        wc.lpszClassName = "serious internal";
-        wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-        RegisterClassExA(&wc);
-
-        g_menuWnd = CreateWindowExA(
-            WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
-            "serious internal", "serious internal",
-            WS_POPUP, 0, 0, kMenuW, kMenuH,
-            nullptr, nullptr, wc.hInstance, nullptr);
-        if (!g_menuWnd) return 1;
-
-        if (!CreateDevice()) return 1;
-
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-        ImGuiIO& io = ImGui::GetIO();
-        io.IniFilename = nullptr;
-        ImGui::StyleColorsDark();
-        ImGui_ImplWin32_Init(g_menuWnd);
-        ImGui_ImplDX11_Init(g_dev, g_ctx);
-
-        ShowWindow(g_menuWnd, SW_HIDE);
-
-        MSG msg{};
-        bool placed = false;
-        while (g_running) {
-            while (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE)) {
-                if (msg.message == WM_QUIT) { g_running = false; break; }
-                TranslateMessage(&msg);
-                DispatchMessageA(&msg);
-            }
-            if (!g_running) break;
-
-            if (!g_game || !IsWindow(g_game)) {
-                g_game = FindGameWindow();
-                placed = false;
-                if (g_game) {
-                    char title[256]{};
-                    GetWindowTextA(g_game, title, sizeof(title));
-                }
-            }
-
-            bool usable = g_show && g_game && IsWindow(g_game) && !IsIconic(g_game)
-                && GetForegroundWindow() == g_game;
-            if (!usable) {
-                ShowWindow(g_menuWnd, SW_HIDE);
-                placed = false;
-                Sleep(100);
-                continue;
-            }
-
-            if (!placed) {
-                POINT p{ 16, 16 };
-                ClientToScreen(g_game, &p);
-                SetWindowPos(g_menuWnd, HWND_TOPMOST, p.x, p.y, kMenuW, kMenuH,
-                    SWP_NOACTIVATE | SWP_SHOWWINDOW);
-                placed = true;
-            }
-
-            ImGui_ImplDX11_NewFrame();
-            ImGui_ImplWin32_NewFrame();
-            ImGui::NewFrame();
-            DrawMenu();
-            ImGui::EndFrame();
-            ImGui::Render();
-
-            const float clear[4] = { 0.06f, 0.06f, 0.08f, 1.0f };
-            g_ctx->OMSetRenderTargets(1, &g_rtv, nullptr);
-            g_ctx->ClearRenderTargetView(g_rtv, clear);
-            ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-            g_swap->Present(1, 0);
-        }
-
-        ImGui_ImplDX11_Shutdown();
-        ImGui_ImplWin32_Shutdown();
-        ImGui::DestroyContext();
-        if (g_rtv) { g_rtv->Release(); g_rtv = nullptr; }
-        if (g_swap) { g_swap->Release(); g_swap = nullptr; }
-        if (g_ctx) { g_ctx->Release(); g_ctx = nullptr; }
-        if (g_dev) { g_dev->Release(); g_dev = nullptr; }
-        if (g_menuWnd) { DestroyWindow(g_menuWnd); g_menuWnd = nullptr; }
-        UnregisterClassA("serious internal", wc.hInstance);
-        return 0;
-    }
-
-    bool Init()
-    {
-        if (g_running) return true;
-        g_running = true;
-        g_thread = CreateThread(nullptr, 0, MenuThread, nullptr, 0, nullptr);
-        return g_thread != nullptr;
-    }
-
-    void Shutdown()
-    {
-        g_running = false;
-        if (g_thread) {
-            WaitForSingleObject(g_thread, 3000);
-            CloseHandle(g_thread);
-            g_thread = nullptr;
-        }
-        if (g_log) { fclose(g_log); g_log = nullptr; }
-    }
-
-    void Toggle() { g_show = !g_show; }
-    bool IsVisible() { return g_show; }
-    bool ShouldUnload() { return g_unload; }
 }

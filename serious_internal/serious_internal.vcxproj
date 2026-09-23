@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\deps\imgui\backends\imgui_impl_dx11.cpp" />
+    <ClCompile Include="..\deps\imgui\backends\imgui_impl_opengl2.cpp" />
     <ClCompile Include="..\deps\imgui\backends\imgui_impl_win32.cpp" />
     <ClCompile Include="..\deps\imgui\imgui.cpp" />
     <ClCompile Include="..\deps\imgui\imgui_demo.cpp" />
@@ -33,12 +34,17 @@
     <ClCompile Include="..\deps\minhook\src\trampoline.c" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="aim.cpp" />
+    <ClCompile Include="overlay.cpp" />
+    <ClCompile Include="crash.cpp" />
+    <ClCompile Include="dinput.cpp" />
+    <ClCompile Include="wininput.cpp" />
     <ClCompile Include="esp.cpp" />
     <ClCompile Include="hack.cpp" />
     <ClCompile Include="menu.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\deps\imgui\backends\imgui_impl_dx11.h" />
+    <ClInclude Include="..\deps\imgui\backends\imgui_impl_opengl2.h" />
     <ClInclude Include="..\deps\imgui\backends\imgui_impl_win32.h" />
     <ClInclude Include="..\deps\imgui\imconfig.h" />
     <ClInclude Include="..\deps\imgui\imgui.h" />
@@ -56,6 +62,10 @@
     <ClInclude Include="..\deps\minhook\src\trampoline.h" />
     <ClInclude Include="esp.h" />
     <ClInclude Include="aim.h" />
+    <ClInclude Include="overlay.h" />
+    <ClInclude Include="crash.h" />
+    <ClInclude Include="dinput.h" />
+    <ClInclude Include="wininput.h" />
     <ClInclude Include="hack.h" />
     <ClInclude Include="menu.h" />
   </ItemGroup>
@@ -125,7 +135,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalDependencies>dwmapi.lib;d3d11.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>dwmapi.lib;d3d11.lib;opengl32.lib;dxguid.lib;ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -146,7 +156,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalDependencies>dwmapi.lib;d3d11.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>dwmapi.lib;d3d11.lib;opengl32.lib;dxguid.lib;ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -163,7 +173,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalDependencies>dwmapi.lib;d3d11.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>dwmapi.lib;d3d11.lib;opengl32.lib;dxguid.lib;ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -184,7 +194,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalDependencies>dwmapi.lib;d3d11.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>dwmapi.lib;d3d11.lib;opengl32.lib;dxguid.lib;ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

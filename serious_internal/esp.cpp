@@ -1,5 +1,6 @@
-﻿#include "esp.h"
+#include "esp.h"
 #include "hack.h"
+#include "overlay.h"
 
 #include <Windows.h>
 #include <GL/gl.h>
@@ -129,7 +130,7 @@ namespace esp {
         }
         float dx = raw.x - s.curr.x, dy = raw.y - s.curr.y, dz = raw.z - s.curr.z;
         float d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 > 1e-10f) { // пять метров за раз если двинулся то это реюз адреса или респавн яхз
+        if (d2 > 1e-10f) { 
             double dt = now - s.tCurr;
             if (d2 > 25.0f || dt <= 0.0) {
                 s.prev = raw; s.curr = raw; s.tPrev = now; s.tCurr = now;
@@ -146,7 +147,7 @@ namespace esp {
         float t = (float)f;
         return { s.prev.x + (s.curr.x - s.prev.x) * t,
                  s.prev.y + (s.curr.y - s.prev.y) * t,
-                 s.prev.z + (s.curr.z - s.prev.z) * t }; // линейная интерполяция от прошлой к настоящей
+                 s.prev.z + (s.curr.z - s.prev.z) * t }; // ???????? ???????????? ?? ??????? ? ?????????
     }
 
     template <typename T>
@@ -412,8 +413,28 @@ namespace esp {
         g_inRender = false;
     }
 
-    static BOOL WINAPI HkWgl(HDC hdc) { if (g_hookMode == 0 || g_hookMode == 1) RenderESP(); return oWgl(hdc); }
-    static BOOL WINAPI HkGdi(HDC hdc) { if (g_hookMode == 0 || g_hookMode == 2) RenderESP(); return oGdi(hdc); }
+    static BOOL WINAPI HkWgl(HDC hdc)
+    {
+        GLint prevMode = GL_MODELVIEW;
+        glGetIntegerv(GL_MATRIX_MODE, &prevMode);
+        glPushAttrib(GL_CURRENT_BIT);
+        glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS);
+
+        if (g_hookMode == 0 || g_hookMode == 1) RenderESP();
+        overlay::OnSwapBuffers(hdc); 
+
+        glPopClientAttrib();
+        glPopAttrib();
+        glMatrixMode((GLenum)prevMode);
+        return oWgl(hdc);
+    }
+    static BOOL WINAPI HkGdi(HDC hdc)
+    {
+        if (g_hookMode == 0 || g_hookMode == 2) RenderESP();
+
+        overlay::OnSwapBuffers(hdc);
+        return oGdi(hdc);
+    }
 
     bool Init()
     {

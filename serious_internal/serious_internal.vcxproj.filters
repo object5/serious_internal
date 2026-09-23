@@ -27,6 +27,9 @@
     <ClCompile Include="..\deps\imgui\backends\imgui_impl_dx11.cpp">
       <Filter>deps\imgui\backends</Filter>
     </ClCompile>
+    <ClCompile Include="..\deps\imgui\backends\imgui_impl_opengl2.cpp">
+      <Filter>deps\imgui\backends</Filter>
+    </ClCompile>
     <ClCompile Include="..\deps\imgui\backends\imgui_impl_win32.cpp">
       <Filter>deps\imgui\backends</Filter>
     </ClCompile>
@@ -61,12 +64,20 @@
       <Filter>deps\minhook\src</Filter>
     </ClCompile>
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="aim.cpp" />
+    <ClCompile Include="overlay.cpp" />
+    <ClCompile Include="crash.cpp" />
+    <ClCompile Include="dinput.cpp" />
+    <ClCompile Include="wininput.cpp" />
     <ClCompile Include="esp.cpp" />
     <ClCompile Include="hack.cpp" />
     <ClCompile Include="menu.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\deps\imgui\backends\imgui_impl_dx11.h">
+      <Filter>deps\imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\imgui\backends\imgui_impl_opengl2.h">
       <Filter>deps\imgui\backends</Filter>
     </ClInclude>
     <ClInclude Include="..\deps\imgui\backends\imgui_impl_win32.h">
@@ -115,6 +126,11 @@
       <Filter>deps\minhook\src</Filter>
     </ClInclude>
     <ClInclude Include="esp.h" />
+    <ClInclude Include="aim.h" />
+    <ClInclude Include="overlay.h" />
+    <ClInclude Include="crash.h" />
+    <ClInclude Include="dinput.h" />
+    <ClInclude Include="wininput.h" />
     <ClInclude Include="hack.h" />
     <ClInclude Include="menu.h" />
   </ItemGroup>

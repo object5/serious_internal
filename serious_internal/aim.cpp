@@ -20,6 +20,7 @@ namespace aim {
 
     static float NormAngle(float a)
     {
+        if (!(a > -1e30f && a < 1e30f)) return 0.0f; 
         while (a > 180.0f) a -= 360.0f;
         while (a < -180.0f) a += 360.0f;
         return a;
